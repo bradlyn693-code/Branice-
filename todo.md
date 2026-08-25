@@ -1,0 +1,11 @@
+# Project TODO
+
+- [x] Define Branice's premium dark-neon visual system, typography, and responsive landing experience.
+- [x] Build the Create Room and Join Room flows with six-character room codes and host board-size selection.
+- [x] Create persisted room and game-state data structures with a live WebSocket synchronization service.
+- [x] Implement official checkers rules: legal moves, forced captures, chained captures, king promotion, and king-only backward movement.
+- [x] Build the realistic wooden board, neon-gloss pieces, player details, turn indicators, and touch-friendly interaction model.
+- [x] Add automatic winner detection, a trophy and confetti celebration, and localStorage trophy counting.
+- [x] Add reduced-motion-aware Framer Motion interactions and responsive layouts.
+- [x] Write unit tests for the game engine and room logic, then validate the UI in desktop and mobile layouts.
+- [x] Document setup, deployment, and GitHub repository handoff requirements.

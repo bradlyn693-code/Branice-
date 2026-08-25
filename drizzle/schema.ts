@@ -25,4 +25,17 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export const gameRooms = mysqlTable("gameRooms", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 6 }).notNull().unique(),
+  boardSize: int("boardSize").notNull(),
+  hostToken: varchar("hostToken", { length: 64 }).notNull(),
+  opponentToken: varchar("opponentToken", { length: 64 }),
+  gameState: text("gameState").notNull(),
+  status: mysqlEnum("status", ["waiting", "active", "complete"]).default("waiting").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GameRoom = typeof gameRooms.$inferSelect;
+export type InsertGameRoom = typeof gameRooms.$inferInsert;

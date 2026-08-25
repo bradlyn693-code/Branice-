@@ -1,0 +1,428 @@
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowLeft,
+  Check,
+  CircleDot,
+  Crown,
+  Copy,
+  Loader2,
+  Radio,
+  RotateCcw,
+  Trophy,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
+import {
+  countPlayerPieces,
+  getLegalMoves,
+  positionKey,
+  positionsEqual,
+  type GameState,
+  type PlayerColor,
+  type Position,
+} from "../../../shared/checkers";
+import { createGameSocket, createPlayerToken } from "@/lib/gameSocket";
+import type { Socket } from "socket.io-client";
+
+type Presence = Record<PlayerColor, boolean>;
+type RoomSnapshot = {
+  code: string;
+  boardSize: 8 | 10 | 12;
+  state: GameState;
+  status: "waiting" | "active" | "complete";
+  hasOpponent: boolean;
+};
+
+const playerMeta: Record<PlayerColor, { name: string; tone: string; opposite: PlayerColor }> = {
+  violet: { name: "Violet", tone: "#d9a4ff", opposite: "ember" },
+  ember: { name: "Ember", tone: "#ff9c8b", opposite: "violet" },
+};
+
+function getPlayerToken() {
+  const storageKey = "branice-player-token";
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing) return existing;
+  const created = createPlayerToken();
+  window.localStorage.setItem(storageKey, created);
+  return created;
+}
+
+function PlayerPanel({
+  color,
+  pieces,
+  active,
+  online,
+  isYou,
+}: {
+  color: PlayerColor;
+  pieces: number;
+  active: boolean;
+  online: boolean;
+  isYou: boolean;
+}) {
+  const meta = playerMeta[color];
+  return (
+    <div
+      className={`inset-stroke rounded-2xl border px-3 py-3 sm:px-4 ${
+        active ? "border-white/20 bg-white/[0.075]" : "border-white/[0.07] bg-white/[0.025]"
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className={`h-8 w-8 rounded-full ${color === "violet" ? "piece-violet" : "piece-ember"}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-white">{isYou ? "You" : "Opponent"}</p>
+            {active && <span className="h-1.5 w-1.5 rounded-full bg-[#d9a4ff] shadow-[0_0_10px_#d9a4ff]" />}
+          </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/42">{meta.name} · {pieces} pieces</p>
+        </div>
+        <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-400 shadow-[0_0_9px_#34d399]" : "bg-white/20"}`} />
+      </div>
+    </div>
+  );
+}
+
+function BoardPiece({ player, king }: { player: PlayerColor; king: boolean }) {
+  return (
+    <motion.span
+      layout
+      initial={{ opacity: 0, scale: 0.82 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+      className={`relative flex aspect-square w-[76%] items-center justify-center rounded-full ${
+        player === "violet" ? "piece-violet" : "piece-ember"
+      }`}
+    >
+      <span className="absolute inset-[12%] rounded-full border border-white/20" />
+      {king && <Crown className="piece-crown relative z-10 h-[44%] w-[44%] rounded-full p-[6%]" strokeWidth={2.8} />}
+    </motion.span>
+  );
+}
+
+function Confetti() {
+  const reducedMotion = useReducedMotion();
+  if (reducedMotion) return null;
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-3 h-56 overflow-hidden">
+      {Array.from({ length: 24 }, (_, index) => {
+        const colors = ["#d9a4ff", "#ffc94c", "#ff9c8b", "#fff"];
+        return (
+          <span
+            key={index}
+            className="confetti absolute h-2 w-1.5 rounded-sm"
+            style={{
+              left: `${4 + ((index * 17) % 92)}%`,
+              top: `${(index % 5) * -15}px`,
+              background: colors[index % colors.length],
+              animationDelay: `${(index % 7) * 38}ms`,
+              ["--drift" as string]: `${((index % 2 ? 1 : -1) * (18 + (index % 6) * 11))}px`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function WinnerOverlay({
+  winner,
+  isWinner,
+  isHost,
+  onRematch,
+  onExit,
+}: {
+  winner: PlayerColor;
+  isWinner: boolean;
+  isHost: boolean;
+  onRematch: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-30 grid place-items-center rounded-[1.45rem] bg-[#100614]/82 p-4 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 18, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+        className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/15 bg-[#1d1025] px-6 py-7 text-center shadow-[0_24px_70px_rgba(0,0,0,.55)]"
+      >
+        <Confetti />
+        <div className="relative mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-[#ffe897] to-[#d58512] shadow-[0_0_35px_rgba(255,207,85,.45)]">
+          <Trophy className="h-8 w-8 text-[#4b2500]" strokeWidth={2.4} />
+        </div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#e6bdff]">Round complete</p>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">{isWinner ? "Victory is yours." : "A fierce finish."}</h2>
+        <p className="mt-2 text-sm leading-6 text-white/58">
+          {isWinner ? "Your trophy counter has been updated on this device." : `${playerMeta[winner].name} takes the board this round.`}
+        </p>
+        <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          {isHost && (
+            <button onClick={onRematch} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#bc70ff] text-sm font-semibold text-[#200630] transition hover:bg-[#d19aff] active:scale-[.98]">
+              <RotateCcw className="h-4 w-4" /> Rematch
+            </button>
+          )}
+          <button onClick={onExit} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[.045] text-sm font-semibold text-white transition hover:bg-white/[.08] active:scale-[.98]">
+            <ArrowLeft className="h-4 w-4" /> Leave table
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+export default function Game() {
+  const [, setLocation] = useLocation();
+  const code = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
+  const [playerToken] = useState(getPlayerToken);
+  const [room, setRoom] = useState<RoomSnapshot | null>(null);
+  const [role, setRole] = useState<PlayerColor | null>(null);
+  const [presence, setPresence] = useState<Presence>({ violet: false, ember: false });
+  const [selected, setSelected] = useState<Position | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [trophies, setTrophies] = useState(0);
+  const socketRef = useRef<Socket | null>(null);
+  const awardedRounds = useRef(new Set<number>());
+
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem("branice-trophies") ?? "0");
+    setTrophies(Number.isFinite(saved) ? saved : 0);
+  }, []);
+
+  useEffect(() => {
+    if (!code) {
+      setLocation("/");
+      return;
+    }
+    const socket = createGameSocket();
+    socketRef.current = socket;
+
+    const joinRoom = () => {
+      socket.emit("room:join", { code, playerToken }, (result: { ok: boolean; role?: PlayerColor; room?: RoomSnapshot; error?: string }) => {
+        if (!result.ok || !result.room || !result.role) {
+          setError(result.error ?? "That room is unavailable.");
+          return;
+        }
+        setRole(result.role);
+        setRoom(result.room);
+        setPresence(current => ({ ...current, [result.role as PlayerColor]: true }));
+      });
+    };
+
+    socket.on("connect", joinRoom);
+    socket.on("room:state", (nextRoom: RoomSnapshot) => {
+      setRoom(nextRoom);
+      setSelected(null);
+    });
+    socket.on("room:presence", (nextPresence: Presence) => setPresence(nextPresence));
+    socket.on("connect_error", () => setError("The live table could not connect. Check your network and try again."));
+    socket.connect();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [code, playerToken, setLocation]);
+
+  useEffect(() => {
+    if (!room?.state.winner || room.state.winner !== role || awardedRounds.current.has(room.state.round)) return;
+    const awardKey = `branice-awarded-${room.code}-${room.state.round}`;
+    if (window.localStorage.getItem(awardKey)) return;
+    awardedRounds.current.add(room.state.round);
+    const nextTrophies = Number(window.localStorage.getItem("branice-trophies") ?? "0") + 1;
+    window.localStorage.setItem(awardKey, "true");
+    window.localStorage.setItem("branice-trophies", String(nextTrophies));
+    setTrophies(nextTrophies);
+  }, [role, room?.code, room?.state.round, room?.state.winner]);
+
+  const legalMoves = useMemo(() => (room?.state ? getLegalMoves(room.state) : []), [room?.state]);
+  const selectedMoves = useMemo(
+    () => (selected ? legalMoves.filter(move => positionsEqual(move.from, selected)) : []),
+    [legalMoves, selected]
+  );
+  const movablePositions = useMemo(() => new Set(legalMoves.map(move => positionKey(move.from))), [legalMoves]);
+  const destinationPositions = useMemo(() => new Set(selectedMoves.map(move => positionKey(move.to))), [selectedMoves]);
+
+  const myTurn = Boolean(room && role && room.state.currentPlayer === role && !room.state.winner);
+  const playerPieces = room?.state && role ? countPlayerPieces(room.state, role) : 0;
+  const opponentPieces = room?.state && role ? countPlayerPieces(room.state, playerMeta[role].opposite) : 0;
+
+  function handleSquare(position: Position) {
+    if (!room || !role || !myTurn) return;
+    const key = positionKey(position);
+    const isDestination = destinationPositions.has(key);
+    if (selected && isDestination) {
+      setSelected(null);
+      socketRef.current?.emit("room:move", { code, playerToken, from: selected, to: position }, (result: { ok: boolean; error?: string }) => {
+        if (!result.ok) setError(result.error ?? "The move could not be saved.");
+      });
+      return;
+    }
+    if (movablePositions.has(key)) {
+      setSelected(position);
+    }
+  }
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("Copy is unavailable here. Share the code manually.");
+    }
+  }
+
+  function requestRematch() {
+    socketRef.current?.emit("room:reset", { code, playerToken }, (result: { ok: boolean; error?: string }) => {
+      if (!result.ok) setError(result.error ?? "The rematch could not begin.");
+    });
+  }
+
+  if (error && !room) {
+    return (
+      <main className="noise-layer grid min-h-screen place-items-center bg-[#0a0710] p-5 text-white">
+        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[.045] p-7 text-center shadow-2xl">
+          <p className="font-mono text-[10px] uppercase tracking-[.22em] text-[#d9a4ff]">Table unavailable</p>
+          <h1 className="mt-3 text-2xl font-bold">{error}</h1>
+          <button onClick={() => setLocation("/")} className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-[#bc70ff] px-5 text-sm font-semibold text-[#200630]">
+            <ArrowLeft className="h-4 w-4" /> Back to Branice
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!room || !role) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#0a0710] text-white">
+        <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-[.22em] text-white/58"><Loader2 className="h-4 w-4 animate-spin text-[#d9a4ff]" /> Opening table</div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-[#0a0710] text-white">
+      <div className="noise-layer fixed inset-0 opacity-[.08]" aria-hidden />
+      <header className="relative z-10 mx-auto flex w-full max-w-[1440px] items-center justify-between px-4 py-4 sm:px-7 sm:py-6">
+        <button onClick={() => setLocation("/")} className="group flex items-center gap-2 text-white/70 transition hover:text-white">
+          <span className="grid h-9 w-9 place-items-center rounded-xl border border-[#d7a3ff]/25 bg-[#b066ff]/10 text-[#dfaaff] group-hover:bg-[#b066ff]/20"><CircleDot className="h-4 w-4" /></span>
+          <span className="text-lg font-bold tracking-tight">Branice</span>
+        </button>
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 font-mono text-[10px] uppercase tracking-[.16em] text-white/55">
+          <Radio className="h-3.5 w-3.5 text-emerald-400" /> Live sync
+        </div>
+      </header>
+
+      <section className="relative z-10 mx-auto grid w-full max-w-[1440px] gap-7 px-4 pb-8 sm:px-7 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="min-w-0">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[.22em] text-[#d9a4ff]">Private table</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Room <span className="font-mono text-[#f0d8ff]">{room.code}</span></h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={copyCode} className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 text-xs font-semibold text-white/75 transition hover:bg-white/[.08]">
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy code"}
+              </button>
+              <span className="font-mono text-[10px] uppercase tracking-[.15em] text-white/40">{room.boardSize} × {room.boardSize}</span>
+            </div>
+          </div>
+
+          <div className="relative mx-auto max-w-[min(92vw,760px)] rounded-[1.8rem] border border-[#e5b785]/20 bg-[#170a10] p-2.5 sm:p-4">
+            <div className="board-wood relative aspect-square overflow-hidden rounded-[1.35rem] p-2 sm:p-3">
+              <div
+                role="grid"
+                aria-label="Branice checkers board"
+                className="grid h-full w-full overflow-hidden rounded-lg border border-black/35 shadow-inner"
+                style={{ gridTemplateColumns: `repeat(${room.boardSize}, minmax(0, 1fr))` }}
+              >
+                {room.state.board.flatMap((boardRow, row) =>
+                  boardRow.map((piece, col) => {
+                    const position = { row, col };
+                    const key = positionKey(position);
+                    const playable = (row + col) % 2 === 1;
+                    const isSelected = positionsEqual(selected, position);
+                    const isTarget = destinationPositions.has(key);
+                    const isMovable = movablePositions.has(key);
+                    const isLast = Boolean(room.state.lastMove && (positionsEqual(room.state.lastMove.from, position) || positionsEqual(room.state.lastMove.to, position)));
+                    return (
+                      <motion.button
+                        layout
+                        type="button"
+                        role="gridcell"
+                        key={key}
+                        aria-label={piece ? `${piece.player} ${piece.king ? "king" : "piece"} at ${String.fromCharCode(65 + col)}${room.boardSize - row}` : `Empty ${String.fromCharCode(65 + col)}${room.boardSize - row}`}
+                        aria-pressed={isSelected}
+                        onClick={() => handleSquare(position)}
+                        className={`relative flex min-w-0 items-center justify-center transition duration-150 focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#e0b0ff] ${
+                          playable ? "board-dark" : "board-light"
+                        } ${isSelected ? "z-10 shadow-[inset_0_0_0_3px_#f2c6ff,inset_0_0_24px_rgba(208,116,255,.7)]" : ""} ${
+                          isTarget ? "z-10 shadow-[inset_0_0_0_3px_#ffe199,inset_0_0_24px_rgba(255,205,90,.68)]" : ""
+                        } ${isLast && !isSelected && !isTarget ? "shadow-[inset_0_0_0_2px_rgba(255,255,255,.32)]" : ""}`}
+                      >
+                        {isMovable && !isSelected && <span aria-hidden className="absolute h-[22%] w-[22%] rounded-full border border-white/65 bg-white/20 shadow-[0_0_14px_rgba(255,255,255,.62)]" />}
+                        {isTarget && <span aria-hidden className="absolute h-[26%] w-[26%] rounded-full border-2 border-[#fff1b2] bg-[#ffd75e]/50 shadow-[0_0_18px_#ffd14d]" />}
+                        {piece && <BoardPiece player={piece.player} king={piece.king} />}
+                      </motion.button>
+                    );
+                  })
+                )}
+              </div>
+              <AnimatePresence>
+                {room.state.winner && (
+                  <WinnerOverlay
+                    winner={room.state.winner}
+                    isWinner={room.state.winner === role}
+                    isHost={role === "violet"}
+                    onRematch={requestRematch}
+                    onExit={() => setLocation("/")}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+
+        <aside className="space-y-4 lg:pt-12">
+          <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4 shadow-[0_14px_42px_rgba(0,0,0,.18)]">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-mono text-[10px] uppercase tracking-[.18em] text-white/44">Match state</p>
+              <span className="font-mono text-[10px] text-[#deb0ff]">Move {String(room.state.moveCount).padStart(2, "0")}</span>
+            </div>
+            <PlayerPanel color={role} pieces={playerPieces} active={room.state.currentPlayer === role} online={presence[role]} isYou />
+            <div className="my-2 h-px bg-white/[.07]" />
+            <PlayerPanel color={playerMeta[role].opposite} pieces={opponentPieces} active={room.state.currentPlayer === playerMeta[role].opposite} online={presence[playerMeta[role].opposite]} isYou={false} />
+          </div>
+
+          <div className="rounded-2xl border border-[#c883ff]/16 bg-gradient-to-br from-[#571e81]/30 to-[#1a0c25]/60 p-4">
+            <div className="flex gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#d18aff]/15 text-[#e2b4ff]"><Users className="h-4 w-4" /></span>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[.18em] text-[#deb0ff]">{room.status === "waiting" ? "Awaiting challenger" : myTurn ? "Your turn" : "Opponent's turn"}</p>
+                <p className="mt-1.5 text-sm leading-5 text-white/68">
+                  {room.status === "waiting" ? "Share the six-character room code to bring your opponent to this table." : room.state.forcedFrom ? "Capture chain active — continue with the highlighted piece." : myTurn ? "Select a glowing piece, then choose its highlighted landing square." : "Live state is synced. Your board will update as your opponent plays."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[10px] uppercase tracking-[.18em] text-white/44">Your trophies</p>
+              <Trophy className="h-4 w-4 text-[#ffcf66]" />
+            </div>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-white">{String(trophies).padStart(2, "0")}</p>
+            <p className="mt-1 text-xs text-white/45">Saved privately in this browser.</p>
+          </div>
+
+          {error && <p role="status" className="rounded-xl border border-[#ff9c8b]/25 bg-[#551b2d]/25 px-3 py-2 text-xs leading-5 text-[#ffc3b7]">{error}</p>}
+        </aside>
+      </section>
+    </main>
+  );
+}

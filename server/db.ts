@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { gameRooms, InsertUser, users } from "../drizzle/schema";
+import type { GameState } from "../shared/checkers";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +90,54 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getGameRoom(code: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Game room storage is unavailable.");
+  const result = await db.select().from(gameRooms).where(eq(gameRooms.code, code)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function createGameRoom(input: {
+  code: string;
+  boardSize: 8 | 10 | 12;
+  hostToken: string;
+  gameState: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Game room storage is unavailable.");
+  await db.insert(gameRooms).values({
+    ...input,
+    status: "waiting",
+  });
+  const room = await getGameRoom(input.code);
+  if (!room) throw new Error("New game room could not be loaded.");
+  return room;
+}
+
+export async function claimGameRoomOpponent(code: string, opponentToken: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Game room storage is unavailable.");
+  await db
+    .update(gameRooms)
+    .set({ opponentToken, status: "active" })
+    .where(eq(gameRooms.code, code));
+  const room = await getGameRoom(code);
+  if (!room) throw new Error("Joined game room could not be loaded.");
+  return room;
+}
+
+export async function updateGameRoomState(
+  code: string,
+  state: GameState,
+  status: "waiting" | "active" | "complete"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Game room storage is unavailable.");
+  await db
+    .update(gameRooms)
+    .set({ gameState: JSON.stringify(state), status })
+    .where(eq(gameRooms.code, code));
+  const room = await getGameRoom(code);
+  if (!room) throw new Error("Updated game room could not be loaded.");
+  return room;
+}
