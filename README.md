@@ -46,6 +46,10 @@ pnpm realtime:smoke
 
 The game works in the development preview and uses a persisted database for room state. For production-grade WebSocket connectivity, configure the project’s managed hosting to use a single always-on instance. This avoids serverless cold starts and keeps Socket.IO room presence stable. The managed always-on option is usage-based, with a maximum compute cost of approximately **$37.50/month** at full 24/7 utilization before the included **$10 monthly usage credit**; network egress is metered separately. Do not enable that hosting option until the account owner reviews the expected cost.
 
+## App shortcut
+
+Branice includes a web app manifest, service worker, mobile app icon, and two installed-app shortcuts: **Create room** and **Join room**. In Chromium browsers, the **Install app** control appears when the browser has accepted the installation criteria. On iOS Safari, use **Share → Add to Home Screen**; the manifest supplies the Branice name, theme, and app icon.
+
 ## GitHub handoff
 
 The repository can be pushed from the project root after authenticating the GitHub CLI:

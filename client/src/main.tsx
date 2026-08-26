@@ -8,6 +8,20 @@ import App from "./App";
 import { startLogin } from "./const";
 import "./index.css";
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(() => navigator.serviceWorker.ready)
+      .then(registration => {
+        console.info("[Branice] shortcut service worker ready", registration.scope);
+      })
+      .catch(() => {
+        // The game remains fully usable when the browser declines service-worker registration.
+      });
+  });
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {

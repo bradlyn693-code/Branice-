@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, CircleDot, Copy, Crown, Loader2, Radio, ShieldCheck, Sparkles, Trophy, Users } from "lucide-react";
+import { ArrowRight, Check, CircleDot, Copy, Crown, Download, Loader2, Radio, ShieldCheck, Sparkles, Trophy, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { createGameSocket, createPlayerToken } from "@/lib/gameSocket";
@@ -7,6 +7,10 @@ import type { Socket } from "socket.io-client";
 
 type Mode = "create" | "join" | null;
 type BoardSize = 8 | 10 | 12;
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
 
 function getPlayerToken() {
   const key = "branice-player-token";
@@ -140,11 +144,47 @@ function RoomDialog({
 export default function Home() {
   const [mode, setMode] = useState<Mode>(null);
   const [trophies, setTrophies] = useState(0);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [installMessage, setInstallMessage] = useState("");
 
   useEffect(() => {
     const value = Number(window.localStorage.getItem("branice-trophies") ?? "0");
     setTrophies(Number.isFinite(value) ? value : 0);
   }, []);
+
+  useEffect(() => {
+    const requestedAction = new URLSearchParams(window.location.search).get("action");
+    if (requestedAction === "create" || requestedAction === "join") setMode(requestedAction);
+
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsInstalled(standalone);
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const markInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    };
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    window.addEventListener("appinstalled", markInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+      window.removeEventListener("appinstalled", markInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (!installPrompt) {
+      setInstallMessage("Use your browser menu to install Branice. On iPhone or iPad, choose Share, then Add to Home Screen.");
+      return;
+    }
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") setInstallMessage("Branice is now available from your device home screen.");
+    setInstallPrompt(null);
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0710] text-white">
@@ -158,7 +198,10 @@ export default function Home() {
           <span className="grid h-10 w-10 place-items-center rounded-xl border border-[#dbacff]/30 bg-[#ae58f7]/12 text-[#e5b7ff] purple-glow"><CircleDot className="h-[19px] w-[19px]" /></span>
           <div><p className="text-xl font-bold leading-none tracking-tight">Branice</p><p className="font-mono mt-1 text-[9px] uppercase tracking-[.21em] text-white/38">The private table</p></div>
         </div>
-        <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:flex"><Radio className="h-3.5 w-3.5 text-emerald-400" /><span className="font-mono text-[10px] uppercase tracking-[.15em] text-white/56">Realtime ready</span></div>
+        <div className="flex items-center gap-2">
+          {!isInstalled && <button onClick={installApp} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7a3ff]/30 bg-[#ad5afb]/12 px-2.5 text-xs font-semibold text-[#e9c9ff] transition hover:bg-[#ad5afb]/20 sm:px-3"><Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Install app</span></button>}
+          <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:flex"><Radio className="h-3.5 w-3.5 text-emerald-400" /><span className="font-mono text-[10px] uppercase tracking-[.15em] text-white/56">{isInstalled ? "App shortcut active" : "Realtime ready"}</span></div>
+        </div>
       </header>
 
       <section className="relative z-10 mx-auto grid w-full max-w-[1380px] items-center gap-10 px-5 pb-16 pt-8 sm:px-8 sm:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(410px,.98fr)] lg:pb-24">
@@ -177,6 +220,7 @@ export default function Home() {
           <div className="mt-7 flex flex-wrap gap-x-5 gap-y-3 font-mono text-[10px] uppercase tracking-[.13em] text-white/44">
             <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Forced captures</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Multi-jump play</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> 8×8 to 12×12</span>
           </div>
+          {installMessage && <p role="status" className="mt-4 max-w-lg rounded-xl border border-[#d7a3ff]/20 bg-[#b766ff]/[.08] px-3 py-2 text-xs leading-5 text-[#e7c7ff]">{installMessage}</p>}
         </div>
         <motion.div initial={{ opacity: 0, scale: 0.96, y: 18 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.12, ease: [0.23, 1, 0.32, 1] }} className="relative px-3 py-4 sm:px-8"><MiniBoard /></motion.div>
       </section>

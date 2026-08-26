@@ -1,0 +1,55 @@
+{
+  "name": "Branice — Private Realtime Checkers",
+  "short_name": "Branice",
+  "description": "A private, premium realtime checkers table.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0a0710",
+  "theme_color": "#0a0710",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/manus-storage/branice-icon-192_ba35a7fa.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/branice-icon-512_7d18eb5c.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Create room",
+      "short_name": "New room",
+      "description": "Start a private Branice checkers room.",
+      "url": "/?action=create",
+      "icons": [
+        {
+          "src": "/manus-storage/branice-icon-192_ba35a7fa.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Join room",
+      "short_name": "Join room",
+      "description": "Enter a private Branice room code.",
+      "url": "/?action=join",
+      "icons": [
+        {
+          "src": "/manus-storage/branice-icon-192_ba35a7fa.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}
