@@ -17,3 +17,4 @@
 - [x] Add a secure email-and-password registration and login flow with protected game access.
 - [x] Test the repaired production flows and update deployment documentation.
 - [x] Push the repaired email-login and multiplayer release to GitHub and verify remote parity.
+- [x] Remove any public output path from Vercel configuration and verify `npm run build`.
