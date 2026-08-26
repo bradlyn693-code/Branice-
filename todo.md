@@ -11,3 +11,4 @@
 - [x] Document setup, deployment, and GitHub repository handoff requirements.
 - [x] Add and verify an installable Branice app shortcut with mobile home-screen metadata and in-app installation guidance.
 - [x] Add fixed-size PNG app icons and complete an end-to-end installability verification for the Branice shortcut.
+- [ ] Push the latest verified Branice project checkpoint to a private GitHub repository.
