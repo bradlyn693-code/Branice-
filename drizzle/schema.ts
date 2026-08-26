@@ -39,3 +39,13 @@ export const gameRooms = mysqlTable("gameRooms", {
 
 export type GameRoom = typeof gameRooms.$inferSelect;
 export type InsertGameRoom = typeof gameRooms.$inferInsert;
+
+export const playerAccounts = mysqlTable("playerAccounts", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PlayerAccount = typeof playerAccounts.$inferSelect;

@@ -1,16 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, CircleDot, Copy, Crown, Download, Loader2, Radio, ShieldCheck, Sparkles, Trophy, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Check, CircleDot, Download, Loader2, LogOut, Radio, ShieldCheck, Sparkles, Trophy, Users } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { createGameSocket, createPlayerToken } from "@/lib/gameSocket";
-import type { Socket } from "socket.io-client";
+import { createPlayerToken } from "@/lib/gameSocket";
+import { trpc } from "@/lib/trpc";
 
 type Mode = "create" | "join" | null;
 type BoardSize = 8 | 10 | 12;
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 function getPlayerToken() {
   const key = "branice-player-token";
@@ -22,219 +19,43 @@ function getPlayerToken() {
 }
 
 function MiniBoard() {
-  return (
-    <div className="board-wood relative mx-auto aspect-square w-full max-w-[440px] rounded-[2rem] p-3 shadow-[0_28px_90px_rgba(0,0,0,.48)] sm:p-4">
-      <div className="grid h-full overflow-hidden rounded-[1.1rem] border border-black/40" style={{ gridTemplateColumns: "repeat(8, minmax(0, 1fr))" }}>
-        {Array.from({ length: 64 }, (_, index) => {
-          const row = Math.floor(index / 8);
-          const col = index % 8;
-          const playable = (row + col) % 2 === 1;
-          const violet = (row === 5 || row === 6) && playable && !(row === 5 && col > 2);
-          const ember = (row === 1 || row === 2) && playable && !(row === 2 && col < 5);
-          const selected = row === 4 && col === 3;
-          return (
-            <div key={index} className={`relative grid place-items-center ${playable ? "board-dark" : "board-light"} ${selected ? "shadow-[inset_0_0_0_3px_#f1c7ff,inset_0_0_25px_rgba(212,118,255,.62)]" : ""}`}>
-              {(violet || ember) && <span className={`relative aspect-square w-[74%] rounded-full ${violet ? "piece-violet" : "piece-ember"}`}><span className="absolute inset-[12%] rounded-full border border-white/20" /></span>}
-              {selected && <span className="absolute h-[21%] w-[21%] rounded-full bg-[#ffe190] shadow-[0_0_14px_#ffd25a]" />}
-            </div>
-          );
-        })}
-      </div>
-      <div className="absolute -right-4 top-[18%] hidden rounded-2xl border border-[#d7a3ff]/25 bg-[#1a0e24]/90 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,.3)] backdrop-blur sm:block">
-        <p className="font-mono text-[9px] uppercase tracking-[.16em] text-[#d9a4ff]">Live move</p>
-        <p className="mt-0.5 text-xs font-semibold text-white">Mandatory capture</p>
-      </div>
-      <div className="absolute -bottom-3 -left-4 hidden rounded-2xl border border-white/10 bg-[#1a0e24]/90 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,.3)] backdrop-blur sm:block">
-        <div className="flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-emerald-400" /><span className="font-mono text-[9px] uppercase tracking-[.15em] text-white/60">Synced now</span></div>
-      </div>
-    </div>
-  );
+  return <div className="board-wood relative mx-auto aspect-square w-full max-w-[440px] rounded-[2rem] p-3 shadow-[0_28px_90px_rgba(0,0,0,.48)] sm:p-4"><div className="grid h-full overflow-hidden rounded-[1.1rem] border border-black/40" style={{ gridTemplateColumns: "repeat(8, minmax(0, 1fr))" }}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const col = index % 8; const playable = (row + col) % 2 === 1; const violet = (row === 5 || row === 6) && playable && !(row === 5 && col > 2); const ember = (row === 1 || row === 2) && playable && !(row === 2 && col < 5); return <div key={index} className={`relative grid place-items-center ${playable ? "board-dark" : "board-light"}`}>{(violet || ember) && <span className={`relative aspect-square w-[74%] rounded-full ${violet ? "piece-violet" : "piece-ember"}`}><span className="absolute inset-[12%] rounded-full border border-white/20" /></span>}</div>; })}</div><div className="absolute -right-4 top-[18%] hidden rounded-2xl border border-[#d7a3ff]/25 bg-[#1a0e24]/90 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,.3)] backdrop-blur sm:block"><p className="font-mono text-[9px] uppercase tracking-[.16em] text-[#d9a4ff]">Live sync</p><p className="mt-0.5 text-xs font-semibold text-white">Private table ready</p></div></div>;
 }
 
-function RoomDialog({
-  mode,
-  onClose,
-}: {
-  mode: Exclude<Mode, null>;
-  onClose: () => void;
-}) {
+function RoomDialog({ mode, onClose }: { mode: Exclude<Mode, null>; onClose: () => void }) {
   const [, setLocation] = useLocation();
   const [boardSize, setBoardSize] = useState<BoardSize>(8);
   const [joinCode, setJoinCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [playerToken] = useState(getPlayerToken);
+  const [error, setError] = useState("");
+  const createRoom = trpc.rooms.create.useMutation({ onSuccess: result => setLocation(`/game?room=${result.room.code}`), onError: result => setError(result.message) });
 
-  function createRoom() {
-    setBusy(true);
-    setError("");
-    const socket: Socket = createGameSocket();
-    socket.on("connect", () => {
-      socket.emit("room:create", { boardSize, playerToken }, (result: { ok: boolean; room?: { code: string }; error?: string }) => {
-        socket.disconnect();
-        if (!result.ok || !result.room) {
-          setError(result.error ?? "The table could not be created.");
-          setBusy(false);
-          return;
-        }
-        setLocation(`/game?room=${result.room.code}`);
-      });
-    });
-    socket.on("connect_error", () => {
-      socket.disconnect();
-      setBusy(false);
-      setError("The live service is unavailable. Please try again.");
-    });
-    socket.connect();
-  }
-
-  function joinRoom(event: React.FormEvent) {
+  function joinRoom(event: FormEvent) {
     event.preventDefault();
     const code = joinCode.trim().toUpperCase();
-    if (!/^[A-Z2-9]{6}$/.test(code)) {
-      setError("Enter the six-character room code you received.");
-      return;
-    }
+    if (!/^[A-Z2-9]{6}$/.test(code)) { setError("Enter the six-character room code you received."); return; }
     setLocation(`/game?room=${code}`);
   }
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center bg-[#08040d]/78 p-4 backdrop-blur-md" onMouseDown={onClose}>
-      <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, y: 8 }} transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }} className="w-full max-w-md rounded-[1.7rem] border border-white/12 bg-[#180c22] p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] sm:p-7" onMouseDown={event => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[.22em] text-[#d9a4ff]">{mode === "create" ? "New private table" : "Enter a private table"}</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">{mode === "create" ? "Set the board." : "Bring the room code."}</h2>
-          </div>
-          <button onClick={onClose} aria-label="Close dialog" className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 text-lg text-white/65 transition hover:bg-white/[.06]">×</button>
-        </div>
-
-        {mode === "create" ? (
-          <div className="mt-7">
-            <p className="text-sm font-medium text-white/80">Board dimensions</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {([8, 10, 12] as BoardSize[]).map(size => (
-                <button key={size} onClick={() => setBoardSize(size)} className={`rounded-xl border px-2 py-3 text-center transition active:scale-[.98] ${boardSize === size ? "border-[#e1b5ff]/65 bg-[#a959f7]/20 text-white shadow-[0_0_25px_rgba(174,87,255,.22)]" : "border-white/10 bg-white/[.025] text-white/52 hover:bg-white/[.07]"}`}>
-                  <span className="block text-lg font-bold">{size}×{size}</span>
-                  <span className="mt-1 block font-mono text-[9px] uppercase tracking-[.14em]">{size === 8 ? "Classic" : size === 10 ? "Extended" : "Grand"}</span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-4 text-sm leading-6 text-white/52">Classic forced-capture rules apply. Larger boards open with additional rows of pieces.</p>
-            <button onClick={createRoom} disabled={busy} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#b55cff] to-[#db8dff] text-sm font-bold text-[#230634] shadow-[0_0_30px_rgba(184,93,255,.28)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70 active:scale-[.985]">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {busy ? "Forging table" : "Create private room"}
-            </button>
-          </div>
-        ) : (
-          <form className="mt-7" onSubmit={joinRoom}>
-            <label className="text-sm font-medium text-white/80" htmlFor="room-code">Six-character code</label>
-            <input id="room-code" value={joinCode} maxLength={6} onChange={event => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ""))} placeholder="A7K9P2" autoComplete="off" className="font-mono mt-3 h-14 w-full rounded-xl border border-white/12 bg-black/20 px-4 text-center text-xl font-medium tracking-[.35em] text-white outline-none transition placeholder:tracking-[.28em] placeholder:text-white/20 focus:border-[#d8a1ff] focus:ring-4 focus:ring-[#ae58f7]/12" />
-            <p className="mt-3 text-sm leading-6 text-white/52">No accounts, no public lobbies. You will join the exact private board your opponent created.</p>
-            <button type="submit" className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#b55cff] to-[#db8dff] text-sm font-bold text-[#230634] shadow-[0_0_30px_rgba(184,93,255,.28)] transition hover:brightness-110 active:scale-[.985]">
-              Join the room <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
-        )}
-        {error && <p className="mt-4 rounded-xl border border-[#ff9c8b]/25 bg-[#601f35]/25 px-3 py-2 text-xs leading-5 text-[#ffc5b8]">{error}</p>}
-      </motion.div>
-    </motion.div>
-  );
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center bg-[#08040d]/78 p-4 backdrop-blur-md" onMouseDown={onClose}><motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, y: 8 }} transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }} className="w-full max-w-md rounded-[1.7rem] border border-white/12 bg-[#180c22] p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] sm:p-7" onMouseDown={event => event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-[10px] uppercase tracking-[.22em] text-[#d9a4ff]">{mode === "create" ? "New private table" : "Enter a private table"}</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-white">{mode === "create" ? "Set the board." : "Bring the room code."}</h2></div><button onClick={onClose} aria-label="Close dialog" className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 text-lg text-white/65 transition hover:bg-white/[.06]">×</button></div>{mode === "create" ? <div className="mt-7"><p className="text-sm font-medium text-white/80">Board dimensions</p><div className="mt-3 grid grid-cols-3 gap-2">{([8, 10, 12] as BoardSize[]).map(size => <button key={size} onClick={() => setBoardSize(size)} className={`rounded-xl border px-2 py-3 text-center transition active:scale-[.98] ${boardSize === size ? "border-[#e1b5ff]/65 bg-[#a959f7]/20 text-white shadow-[0_0_25px_rgba(174,87,255,.22)]" : "border-white/10 bg-white/[.025] text-white/52 hover:bg-white/[.07]"}`}><span className="block text-lg font-bold">{size}×{size}</span><span className="mt-1 block font-mono text-[9px] uppercase tracking-[.14em]">{size === 8 ? "Classic" : size === 10 ? "Extended" : "Grand"}</span></button>)}</div><p className="mt-4 text-sm leading-6 text-white/52">Classic forced-capture rules apply. Larger boards open with additional rows of pieces.</p><button onClick={() => { setError(""); createRoom.mutate({ boardSize, playerToken }); }} disabled={createRoom.isPending} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#b55cff] to-[#db8dff] text-sm font-bold text-[#230634] shadow-[0_0_30px_rgba(184,93,255,.28)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70 active:scale-[.985]">{createRoom.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{createRoom.isPending ? "Forging table" : "Create private room"}</button></div> : <form className="mt-7" onSubmit={joinRoom}><label className="text-sm font-medium text-white/80" htmlFor="room-code">Six-character code</label><input id="room-code" value={joinCode} maxLength={6} onChange={event => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ""))} placeholder="A7K9P2" autoComplete="off" className="font-mono mt-3 h-14 w-full rounded-xl border border-white/12 bg-black/20 px-4 text-center text-xl font-medium tracking-[.35em] text-white outline-none transition placeholder:tracking-[.28em] placeholder:text-white/20 focus:border-[#d8a1ff] focus:ring-4 focus:ring-[#ae58f7]/12" /><p className="mt-3 text-sm leading-6 text-white/52">Your room joins securely and stays synchronized without a page refresh.</p><button type="submit" className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#b55cff] to-[#db8dff] text-sm font-bold text-[#230634] shadow-[0_0_30px_rgba(184,93,255,.28)] transition hover:brightness-110 active:scale-[.985]">Join the room <ArrowRight className="h-4 w-4" /></button></form>}{error && <p className="mt-4 rounded-xl border border-[#ff9c8b]/25 bg-[#601f35]/25 px-3 py-2 text-xs leading-5 text-[#ffc5b8]">{error}</p>}</motion.div></motion.div>;
 }
 
 export default function Home() {
+  const [, setLocation] = useLocation();
+  const auth = trpc.credentials.me.useQuery();
+  const utils = trpc.useUtils();
   const [mode, setMode] = useState<Mode>(null);
   const [trophies, setTrophies] = useState(0);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [installMessage, setInstallMessage] = useState("");
+  const signOut = trpc.credentials.signOut.useMutation({ onSuccess: async () => { await utils.credentials.me.invalidate(); setLocation("/login"); } });
 
-  useEffect(() => {
-    const value = Number(window.localStorage.getItem("branice-trophies") ?? "0");
-    setTrophies(Number.isFinite(value) ? value : 0);
-  }, []);
+  useEffect(() => { if (!auth.isLoading && !auth.data) setLocation(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); }, [auth.data, auth.isLoading, setLocation]);
+  useEffect(() => { const value = Number(window.localStorage.getItem("branice-trophies") ?? "0"); setTrophies(Number.isFinite(value) ? value : 0); }, []);
+  useEffect(() => { const action = new URLSearchParams(window.location.search).get("action"); if (action === "create" || action === "join") setMode(action); const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone); setIsInstalled(standalone); const capture = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); }; const installed = () => { setIsInstalled(true); setInstallPrompt(null); }; window.addEventListener("beforeinstallprompt", capture); window.addEventListener("appinstalled", installed); return () => { window.removeEventListener("beforeinstallprompt", capture); window.removeEventListener("appinstalled", installed); }; }, []);
+  async function installApp() { if (!installPrompt) { setInstallMessage("Use your browser menu to install Branice. On iPhone or iPad, choose Share, then Add to Home Screen."); return; } await installPrompt.prompt(); const choice = await installPrompt.userChoice; if (choice.outcome === "accepted") setInstallMessage("Branice is now available from your device home screen."); setInstallPrompt(null); }
 
-  useEffect(() => {
-    const requestedAction = new URLSearchParams(window.location.search).get("action");
-    if (requestedAction === "create" || requestedAction === "join") setMode(requestedAction);
-
-    const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-    setIsInstalled(standalone);
-    const captureInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as InstallPromptEvent);
-    };
-    const markInstalled = () => {
-      setIsInstalled(true);
-      setInstallPrompt(null);
-    };
-    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
-    window.addEventListener("appinstalled", markInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
-      window.removeEventListener("appinstalled", markInstalled);
-    };
-  }, []);
-
-  async function installApp() {
-    if (!installPrompt) {
-      setInstallMessage("Use your browser menu to install Branice. On iPhone or iPad, choose Share, then Add to Home Screen.");
-      return;
-    }
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    if (choice.outcome === "accepted") setInstallMessage("Branice is now available from your device home screen.");
-    setInstallPrompt(null);
-  }
-
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-[#0a0710] text-white">
-      <div className="hero-grid absolute inset-0 opacity-70" aria-hidden />
-      <div className="noise-layer pointer-events-none absolute inset-0 opacity-[.065]" aria-hidden />
-      <div className="absolute -left-44 top-12 h-80 w-80 rounded-full bg-[#9e49f4]/20 blur-[105px]" aria-hidden />
-      <div className="absolute -right-28 top-40 h-80 w-80 rounded-full bg-[#e251b9]/10 blur-[110px]" aria-hidden />
-
-      <header className="relative z-10 mx-auto flex w-full max-w-[1380px] items-center justify-between px-5 py-5 sm:px-8 sm:py-7">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl border border-[#dbacff]/30 bg-[#ae58f7]/12 text-[#e5b7ff] purple-glow"><CircleDot className="h-[19px] w-[19px]" /></span>
-          <div><p className="text-xl font-bold leading-none tracking-tight">Branice</p><p className="font-mono mt-1 text-[9px] uppercase tracking-[.21em] text-white/38">The private table</p></div>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isInstalled && <button onClick={installApp} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7a3ff]/30 bg-[#ad5afb]/12 px-2.5 text-xs font-semibold text-[#e9c9ff] transition hover:bg-[#ad5afb]/20 sm:px-3"><Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Install app</span></button>}
-          <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:flex"><Radio className="h-3.5 w-3.5 text-emerald-400" /><span className="font-mono text-[10px] uppercase tracking-[.15em] text-white/56">{isInstalled ? "App shortcut active" : "Realtime ready"}</span></div>
-        </div>
-      </header>
-
-      <section className="relative z-10 mx-auto grid w-full max-w-[1380px] items-center gap-10 px-5 pb-16 pt-8 sm:px-8 sm:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(410px,.98fr)] lg:pb-24">
-        <div className="max-w-2xl">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38 }} className="inline-flex items-center gap-2 rounded-full border border-[#d8a0ff]/20 bg-[#b86aff]/[.08] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.17em] text-[#e4bdff]"><Sparkles className="h-3.5 w-3.5" /> Dark board. Bright instincts.</motion.div>
-          <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.05 }} className="mt-6 max-w-xl text-[clamp(3rem,7vw,6.45rem)] font-bold leading-[.92] tracking-[-.065em] text-white">Checkers, <span className="bg-gradient-to-r from-[#d99aff] via-[#b55cff] to-[#f0ceff] bg-clip-text text-transparent">refined.</span></motion.h1>
-          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.1 }} className="mt-6 max-w-lg text-base leading-7 text-white/60 sm:text-lg">A private multiplayer table for sharp, fast checkers. Create a six-character room, share it once, and play with instant state sync and uncompromising rules.</motion.p>
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.15 }} className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2">
-            <button onClick={() => setMode("create")} className="group flex min-h-16 items-center justify-between rounded-2xl bg-gradient-to-r from-[#b55cff] to-[#dc91ff] px-5 text-left text-[#250637] shadow-[0_0_38px_rgba(177,83,255,.28)] transition hover:brightness-110 active:scale-[.985]">
-              <span><span className="block text-base font-bold">Create room</span><span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[.16em] text-[#4d1766]">Host a private table</span></span><ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </button>
-            <button onClick={() => setMode("join")} className="group flex min-h-16 items-center justify-between rounded-2xl border border-white/12 bg-white/[.045] px-5 text-left transition hover:border-[#d49aff]/40 hover:bg-white/[.075] active:scale-[.985]">
-              <span><span className="block text-base font-bold text-white">Join room</span><span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[.16em] text-white/43">Enter your code</span></span><ArrowRight className="h-5 w-5 text-[#dda8ff] transition-transform group-hover:translate-x-1" />
-            </button>
-          </motion.div>
-          <div className="mt-7 flex flex-wrap gap-x-5 gap-y-3 font-mono text-[10px] uppercase tracking-[.13em] text-white/44">
-            <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Forced captures</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Multi-jump play</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> 8×8 to 12×12</span>
-          </div>
-          {installMessage && <p role="status" className="mt-4 max-w-lg rounded-xl border border-[#d7a3ff]/20 bg-[#b766ff]/[.08] px-3 py-2 text-xs leading-5 text-[#e7c7ff]">{installMessage}</p>}
-        </div>
-        <motion.div initial={{ opacity: 0, scale: 0.96, y: 18 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.12, ease: [0.23, 1, 0.32, 1] }} className="relative px-3 py-4 sm:px-8"><MiniBoard /></motion.div>
-      </section>
-
-      <section className="relative z-10 border-y border-white/[.075] bg-black/[.08]">
-        <div className="mx-auto grid max-w-[1380px] gap-px sm:grid-cols-3">
-          <div className="flex items-center gap-4 px-5 py-5 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#dba8ff]"><ShieldCheck className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Private by design</p><p className="mt-0.5 text-xs text-white/45">No public rooms or profiles.</p></div></div>
-          <div className="flex items-center gap-4 border-y border-white/[.075] px-5 py-5 sm:border-x sm:border-y-0 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#dba8ff]"><Users className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Two players, one board</p><p className="mt-0.5 text-xs text-white/45">A room is held for exactly one rival.</p></div></div>
-          <div className="flex items-center gap-4 px-5 py-5 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#ffc959]"><Trophy className="h-4 w-4" /></span><div><p className="text-sm font-semibold">{String(trophies).padStart(2, "0")} local trophies</p><p className="mt-0.5 text-xs text-white/45">Wins stay saved on this device.</p></div></div>
-        </div>
-      </section>
-
-      <footer className="relative z-10 mx-auto flex max-w-[1380px] flex-wrap items-center justify-between gap-3 px-5 py-6 text-xs text-white/34 sm:px-8"><p>Branice · private realtime checkers</p><p className="font-mono text-[10px] uppercase tracking-[.15em]">Play clean. Play sharp.</p></footer>
-      <AnimatePresence>{mode && <RoomDialog mode={mode} onClose={() => setMode(null)} />}</AnimatePresence>
-    </main>
-  );
+  if (auth.isLoading || !auth.data) return <main className="grid min-h-screen place-items-center bg-[#0a0710] text-white"><Loader2 className="h-5 w-5 animate-spin text-[#d9a4ff]" /></main>;
+  return <main className="relative min-h-screen overflow-hidden bg-[#0a0710] text-white"><div className="hero-grid absolute inset-0 opacity-70" aria-hidden /><div className="noise-layer pointer-events-none absolute inset-0 opacity-[.065]" aria-hidden /><div className="absolute -left-44 top-12 h-80 w-80 rounded-full bg-[#9e49f4]/20 blur-[105px]" aria-hidden /><div className="absolute -right-28 top-40 h-80 w-80 rounded-full bg-[#e251b9]/10 blur-[110px]" aria-hidden /><header className="relative z-10 mx-auto flex w-full max-w-[1380px] items-center justify-between gap-3 px-5 py-5 sm:px-8 sm:py-7"><div className="flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-xl border border-[#dbacff]/30 bg-[#ae58f7]/12 text-[#e5b7ff] purple-glow"><CircleDot className="h-[19px] w-[19px]" /></span><div><p className="text-xl font-bold leading-none tracking-tight">Branice</p><p className="font-mono mt-1 text-[9px] uppercase tracking-[.21em] text-white/38">The private table</p></div></div><div className="flex items-center gap-2">{!isInstalled && <button onClick={installApp} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7a3ff]/30 bg-[#ad5afb]/12 px-2.5 text-xs font-semibold text-[#e9c9ff] transition hover:bg-[#ad5afb]/20 sm:px-3"><Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">Install app</span></button>}<button title="Sign out" onClick={() => signOut.mutate()} className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[.035] text-white/55 transition hover:bg-white/[.08] hover:text-white"><LogOut className="h-3.5 w-3.5" /></button><div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:flex"><Radio className="h-3.5 w-3.5 text-emerald-400" /><span className="font-mono text-[10px] uppercase tracking-[.15em] text-white/56">{isInstalled ? "App shortcut active" : "Live sync ready"}</span></div></div></header><section className="relative z-10 mx-auto grid w-full max-w-[1380px] items-center gap-10 px-5 pb-16 pt-8 sm:px-8 sm:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(410px,.98fr)] lg:pb-24"><div className="max-w-2xl"><motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38 }} className="inline-flex items-center gap-2 rounded-full border border-[#d8a0ff]/20 bg-[#b86aff]/[.08] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.17em] text-[#e4bdff]"><Sparkles className="h-3.5 w-3.5" /> Signed in as {auth.data.email}</motion.div><motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.05 }} className="mt-6 max-w-xl text-[clamp(3rem,7vw,6.45rem)] font-bold leading-[.92] tracking-[-.065em] text-white">Checkers, <span className="bg-gradient-to-r from-[#d99aff] via-[#b55cff] to-[#f0ceff] bg-clip-text text-transparent">refined.</span></motion.h1><motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.1 }} className="mt-6 max-w-lg text-base leading-7 text-white/60 sm:text-lg">A private multiplayer table for sharp, fast checkers. Create a six-character room, share it once, and play with automatic live synchronization and uncompromising rules.</motion.p><motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.48, delay: 0.15 }} className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2"><button onClick={() => setMode("create")} className="group flex min-h-16 items-center justify-between rounded-2xl bg-gradient-to-r from-[#b55cff] to-[#dc91ff] px-5 text-left text-[#250637] shadow-[0_0_38px_rgba(177,83,255,.28)] transition hover:brightness-110 active:scale-[.985]"><span><span className="block text-base font-bold">Create room</span><span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[.16em] text-[#4d1766]">Host a private table</span></span><ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" /></button><button onClick={() => setMode("join")} className="group flex min-h-16 items-center justify-between rounded-2xl border border-white/12 bg-white/[.045] px-5 text-left transition hover:border-[#d49aff]/40 hover:bg-white/[.075] active:scale-[.985]"><span><span className="block text-base font-bold text-white">Join room</span><span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[.16em] text-white/43">Enter your code</span></span><ArrowRight className="h-5 w-5 text-[#dda8ff] transition-transform group-hover:translate-x-1" /></button></motion.div><div className="mt-7 flex flex-wrap gap-x-5 gap-y-3 font-mono text-[10px] uppercase tracking-[.13em] text-white/44"><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Forced captures</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> Multi-jump play</span><span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d7a1ff]" /> 8×8 to 12×12</span></div>{installMessage && <p role="status" className="mt-4 max-w-lg rounded-xl border border-[#d7a3ff]/20 bg-[#b766ff]/[.08] px-3 py-2 text-xs leading-5 text-[#e7c7ff]">{installMessage}</p>}</div><motion.div initial={{ opacity: 0, scale: 0.96, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.12, ease: [0.23, 1, 0.32, 1] }} className="relative px-3 py-4 sm:px-8"><MiniBoard /></motion.div></section><section className="relative z-10 border-y border-white/[.075] bg-black/[.08]"><div className="mx-auto grid max-w-[1380px] gap-px sm:grid-cols-3"><div className="flex items-center gap-4 px-5 py-5 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#dba8ff]"><ShieldCheck className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Protected by sign-in</p><p className="mt-0.5 text-xs text-white/45">Your rooms require your email session.</p></div></div><div className="flex items-center gap-4 border-y border-white/[.075] px-5 py-5 sm:border-x sm:border-y-0 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#dba8ff]"><Users className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Two players, one board</p><p className="mt-0.5 text-xs text-white/45">Automatic live state polling.</p></div></div><div className="flex items-center gap-4 px-5 py-5 sm:px-8"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.05] text-[#ffc959]"><Trophy className="h-4 w-4" /></span><div><p className="text-sm font-semibold">{String(trophies).padStart(2, "0")} local trophies</p><p className="mt-0.5 text-xs text-white/45">Wins stay saved on this device.</p></div></div></div></section><footer className="relative z-10 mx-auto flex max-w-[1380px] flex-wrap items-center justify-between gap-3 px-5 py-6 text-xs text-white/34 sm:px-8"><p>Branice · private realtime checkers</p><p className="font-mono text-[10px] uppercase tracking-[.15em]">Play clean. Play sharp.</p></footer><AnimatePresence>{mode && <RoomDialog mode={mode} onClose={() => setMode(null)} />}</AnimatePresence></main>;
 }

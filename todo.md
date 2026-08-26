@@ -12,3 +12,7 @@
 - [x] Add and verify an installable Branice app shortcut with mobile home-screen metadata and in-app installation guidance.
 - [x] Add fixed-size PNG app icons and complete an end-to-end installability verification for the Branice shortcut.
 - [x] Push the latest verified Branice project checkpoint to a GitHub repository.
+- [ ] Diagnose and repair the deployed shortcut app installation behavior.
+- [ ] Diagnose and repair live multiplayer room connectivity and synchronization.
+- [ ] Add a secure email-and-password registration and login flow with protected game access.
+- [ ] Test the repaired production flows and update deployment documentation.

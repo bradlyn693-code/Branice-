@@ -27,6 +27,21 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+const requireCredentialUser = t.middleware(async opts => {
+  const { ctx, next } = opts;
+  if (!ctx.credentialUser) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Please sign in to play Branice." });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      credentialUser: ctx.credentialUser,
+    },
+  });
+});
+
+export const credentialProcedure = t.procedure.use(requireCredentialUser);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

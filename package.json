@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "realtime:smoke": "node scripts/realtime-smoke.mjs",
+    "auth-room:smoke": "node scripts/auth-room-smoke.mjs",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

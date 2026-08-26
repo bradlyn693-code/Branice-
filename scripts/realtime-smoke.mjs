@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const endpoint = "http://localhost:3000";
+const endpoint = process.env.BRANICE_ENDPOINT ?? "http://localhost:3000";
 
 function connect(label) {
   return new Promise((resolve, reject) => {

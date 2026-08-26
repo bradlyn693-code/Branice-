@@ -7,7 +7,8 @@
 | Area | Implementation |
 | --- | --- |
 | Room flow | The host creates a private six-character room. A second player enters that code to claim the opposing side. |
-| Live play | Socket.IO broadcasts authoritative room state over a WebSocket-first connection without page reloads. The persisted MySQL room record allows game state to survive reconnects. |
+| Live play | The game persists authoritative room state in MySQL and refreshes it automatically in the background, so both players stay synchronized without page reloads even when a browser or deployment blocks WebSocket upgrades. Socket.IO remains available where the transport supports it. |
+| Player access | Players create an account or sign in using **email and password only**. Passwords are salted and hashed server-side; session cookies protect room API access. |
 | Official play rules | The rules engine enforces diagonal movement, compulsory captures, multi-jump continuations, promotion at the far edge, and backward moves for kings only. |
 | Visual design | The interface uses a dark obsidian base, neon-violet primary accent, warm ember opponent color, procedural wooden-board texture, glossy pieces, and accessible status indicators. |
 | End state | Automatic win detection activates a trophy-and-confetti overlay. Per-device wins are retained in `localStorage`. |
@@ -40,11 +41,11 @@ pnpm test
 pnpm realtime:smoke
 ```
 
-`realtime:smoke` starts two Socket.IO clients against a locally running server, creates a room, joins it, and validates a synchronized legal opening move.
+`auth-room:smoke` registers two temporary test accounts, confirms session-cookie sign-in, creates and joins a protected room, validates a synchronized legal opening move, and verifies anonymous room access is rejected.
 
 ## Production deployment
 
-The game works in the development preview and uses a persisted database for room state. For production-grade WebSocket connectivity, configure the project’s managed hosting to use a single always-on instance. This avoids serverless cold starts and keeps Socket.IO room presence stable. The managed always-on option is usage-based, with a maximum compute cost of approximately **$37.50/month** at full 24/7 utilization before the included **$10 monthly usage credit**; network egress is metered separately. Do not enable that hosting option until the account owner reviews the expected cost.
+The game works in the development preview and uses persisted room state plus automatic background synchronization, so it works on the default managed deployment without requiring a persistent WebSocket process. For sub-second WebSocket presence at higher scale, configure the project’s managed hosting to use a single always-on instance. This is optional and usage-based, with a maximum compute cost of approximately **$37.50/month** at full 24/7 utilization before the included **$10 monthly usage credit**; network egress is metered separately.
 
 ## App shortcut
 

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { gameRooms, InsertUser, users } from "../drizzle/schema";
+import { gameRooms, InsertUser, playerAccounts, users } from "../drizzle/schema";
 import type { GameState } from "../shared/checkers";
 import { ENV } from './_core/env';
 
@@ -140,4 +140,20 @@ export async function updateGameRoomState(
   const room = await getGameRoom(code);
   if (!room) throw new Error("Updated game room could not be loaded.");
   return room;
+}
+
+export async function getPlayerAccountByEmail(email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Account storage is unavailable.");
+  const result = await db.select().from(playerAccounts).where(eq(playerAccounts.email, email)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function createPlayerAccount(input: { email: string; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Account storage is unavailable.");
+  await db.insert(playerAccounts).values(input);
+  const account = await getPlayerAccountByEmail(input.email);
+  if (!account) throw new Error("New player account could not be loaded.");
+  return account;
 }

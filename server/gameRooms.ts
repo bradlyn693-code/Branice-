@@ -16,6 +16,7 @@ import {
   getGameRoom,
   updateGameRoomState,
 } from "./db";
+import { getCredentialUserFromRequest, type CredentialIdentity } from "./credentialAuth";
 
 type RoomStatus = "waiting" | "active" | "complete";
 type Ack = (payload: Record<string, unknown>) => void;
@@ -99,6 +100,16 @@ export function registerGameSockets(httpServer: HttpServer) {
   const io = new Server(httpServer, {
     path: "/api/socket.io",
     cors: { origin: true, credentials: true },
+  });
+
+  io.use(async (socket, next) => {
+    const credentialUser = await getCredentialUserFromRequest(socket.request);
+    if (!credentialUser) {
+      next(new Error("AUTH_REQUIRED"));
+      return;
+    }
+    socket.data.credentialUser = credentialUser satisfies CredentialIdentity;
+    next();
   });
 
   io.on("connection", socket => {
