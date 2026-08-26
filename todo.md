@@ -16,3 +16,4 @@
 - [x] Diagnose and repair live multiplayer room connectivity and synchronization.
 - [x] Add a secure email-and-password registration and login flow with protected game access.
 - [x] Test the repaired production flows and update deployment documentation.
+- [ ] Push the repaired email-login and multiplayer release to GitHub and verify remote parity.
