@@ -18,3 +18,4 @@
 - [x] Test the repaired production flows and update deployment documentation.
 - [x] Push the repaired email-login and multiplayer release to GitHub and verify remote parity.
 - [x] Remove any public output path from Vercel configuration and verify `npm run build`.
+- [ ] Push the updated Vercel configuration to GitHub and verify remote parity.
