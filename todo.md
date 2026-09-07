@@ -24,3 +24,4 @@
 - [x] Push the Branice😘 Vercel-ready release to bradlyn693-code/Branice- and verify remote parity plus automatic deployment files.
 - [x] Fix Vercel npm install dependency resolution and verify a no-dashboard-configuration deployment build.
 - [x] Push the latest Vercel lockfile and deployment fixes to bradlyn693-code/Branice- and verify remote parity.
+- [x] Add the footer credit “proudly made by Bradlyn & shanice 😍” with a Kenyan flag mark and push the update to GitHub.
