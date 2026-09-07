@@ -19,3 +19,5 @@
 - [x] Push the repaired email-login and multiplayer release to GitHub and verify remote parity.
 - [x] Remove any public output path from Vercel configuration and verify `npm run build`.
 - [x] Push the updated Vercel configuration to GitHub and verify remote parity.
+- [x] Apply Branice😘 branding across title, metadata, installable app labels, and visible app copy.
+- [x] Simplify Vercel deployment configuration so the repository can be imported with automatic detection and no manual output-directory setup.

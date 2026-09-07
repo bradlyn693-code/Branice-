@@ -1,6 +1,6 @@
-# Branice
+# Branice😘
 
-**Branice** is a premium private multiplayer checkers experience built with React, Tailwind CSS, Framer Motion, Socket.IO, Express, Drizzle, and MySQL. It offers invitation-only six-character rooms, synchronized game state, selectable 8×8, 10×10, and 12×12 boards, mandatory captures, chained jumps, king promotion, responsive controls, and local trophy tracking.
+**Branice😘** is a premium private multiplayer checkers experience built with React, Tailwind CSS, Framer Motion, Socket.IO, Express, Drizzle, and MySQL. It offers invitation-only six-character rooms, synchronized game state, selectable 8×8, 10×10, and 12×12 boards, mandatory captures, chained jumps, king promotion, responsive controls, and local trophy tracking.
 
 ## Included functionality
 
@@ -45,11 +45,15 @@ pnpm realtime:smoke
 
 ## Production deployment
 
+The repository includes a lowercase `vercel.json` with the Vite framework, `npm install`, `npm run build`, and the generated `dist/public` output directory already defined. Import the GitHub repository into Vercel and leave the project settings at their detected defaults; no manual build-command or output-directory setup is required.
+
+The frontend build is verified with `npm run build`. The repository also includes `api/[...path].ts`, which exposes the existing Express/tRPC credential and room procedures as a Vercel serverless function. Add the existing database and application environment variables in Vercel’s environment store; no code or build-setting changes are required. Socket.IO presence is optional because the client falls back to persisted room-state polling.
+
 The game works in the development preview and uses persisted room state plus automatic background synchronization, so it works on the default managed deployment without requiring a persistent WebSocket process. For sub-second WebSocket presence at higher scale, configure the project’s managed hosting to use a single always-on instance. This is optional and usage-based, with a maximum compute cost of approximately **$37.50/month** at full 24/7 utilization before the included **$10 monthly usage credit**; network egress is metered separately.
 
 ## App shortcut
 
-Branice includes a web app manifest, service worker, mobile app icon, and two installed-app shortcuts: **Create room** and **Join room**. In Chromium browsers, the **Install app** control appears when the browser has accepted the installation criteria. On iOS Safari, use **Share → Add to Home Screen**; the manifest supplies the Branice name, theme, and app icon.
+Branice includes a web app manifest, service worker, mobile app icon, and two installed-app shortcuts: **Create room** and **Join room**. In Chromium browsers, the **Install app** control appears when the browser has accepted the installation criteria. On iOS Safari, use **Share → Add to Home Screen**; the manifest supplies the Branice😘 name, theme, and app icon.
 
 ## GitHub handoff
 

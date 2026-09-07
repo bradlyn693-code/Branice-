@@ -42,12 +42,12 @@ export default function Login() {
 
   async function installApp() {
     if (!installPrompt) {
-      setInstallMessage("Use your browser menu to install Branice. On iPhone or iPad, choose Share, then Add to Home Screen.");
+      setInstallMessage("Use your browser menu to install Branice😘. On iPhone or iPad, choose Share, then Add to Home Screen.");
       return;
     }
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
-    if (choice.outcome === "accepted") setInstallMessage("Branice is now available from your device home screen.");
+    if (choice.outcome === "accepted") setInstallMessage("Branice😘 is now available from your device home screen.");
     setInstallPrompt(null);
   }
 
@@ -69,12 +69,12 @@ export default function Login() {
       <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="relative w-full max-w-md rounded-[1.8rem] border border-white/12 bg-[#170b20]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,.58)] backdrop-blur-xl sm:p-8">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 place-items-center rounded-xl border border-[#dbacff]/30 bg-[#ae58f7]/12 text-[#e5b7ff] purple-glow"><CircleDot className="h-5 w-5" /></span>
-          <div><p className="text-xl font-bold leading-none tracking-tight">Branice</p><p className="font-mono mt-1 text-[9px] uppercase tracking-[.19em] text-white/40">Private player access</p></div>
+          <div><p className="text-xl font-bold leading-none tracking-tight">Branice😘</p><p className="font-mono mt-1 text-[9px] uppercase tracking-[.19em] text-white/40">Private player access</p></div>
         </div>
-        <button onClick={installApp} className="mt-5 inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7a3ff]/30 bg-[#ad5afb]/12 px-3 text-xs font-semibold text-[#e9c9ff] transition hover:bg-[#ad5afb]/20"><Download className="h-3.5 w-3.5" /> Install Branice</button>
+        <button onClick={installApp} className="mt-5 inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7a3ff]/30 bg-[#ad5afb]/12 px-3 text-xs font-semibold text-[#e9c9ff] transition hover:bg-[#ad5afb]/20"><Download className="h-3.5 w-3.5" /> Install Branice😘</button>
         <div className="mt-9">
           <p className="font-mono text-[10px] uppercase tracking-[.22em] text-[#d9a4ff]">{mode === "signIn" ? "Welcome back" : "Create your table key"}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-[-.04em]">{mode === "signIn" ? "Sign in to play." : "Join Branice."}</h1>
+          <h1 className="mt-2 text-3xl font-bold tracking-[-.04em]">{mode === "signIn" ? "Sign in to play." : "Join Branice😘."}</h1>
           <p className="mt-3 text-sm leading-6 text-white/54">Use your email and password to protect your private rooms and reconnect across devices.</p>
         </div>
         <form className="mt-7 space-y-4" onSubmit={submit}>
@@ -84,7 +84,7 @@ export default function Login() {
           {installMessage && <p role="status" className="rounded-xl border border-[#d7a3ff]/20 bg-[#b766ff]/[.08] px-3 py-2 text-xs leading-5 text-[#e7c7ff]">{installMessage}</p>}
           <button disabled={busy} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#b55cff] to-[#db8dff] text-sm font-bold text-[#230634] shadow-[0_0_30px_rgba(184,93,255,.28)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70 active:scale-[.985]">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}{busy ? "Securing access" : mode === "signIn" ? "Sign in" : "Create account"}</button>
         </form>
-        <button onClick={() => { setMode(mode === "signIn" ? "register" : "signIn"); setError(""); }} className="mt-5 w-full text-center text-sm text-white/55 transition hover:text-[#e3b9ff]">{mode === "signIn" ? "New to Branice? Create an account" : "Already have an account? Sign in"}</button>
+        <button onClick={() => { setMode(mode === "signIn" ? "register" : "signIn"); setError(""); }} className="mt-5 w-full text-center text-sm text-white/55 transition hover:text-[#e3b9ff]">{mode === "signIn" ? "New to Branice😘? Create an account" : "Already have an account? Sign in"}</button>
         <div className="mt-6 flex items-start gap-2 rounded-xl border border-white/[.07] bg-white/[.025] px-3 py-2.5 text-xs leading-5 text-white/44"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#d9a4ff]" /> Passwords are stored only as secure one-way hashes. There is no social or third-party sign-in.</div>
       </motion.section>
     </main>

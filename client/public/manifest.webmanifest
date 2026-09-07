@@ -1,7 +1,7 @@
 {
-  "name": "Branice — Private Realtime Checkers",
-  "short_name": "Branice",
-  "description": "A private, premium realtime checkers table.",
+  "name": "Branice😘 — Private Realtime Checkers",
+  "short_name": "Branice😘",
+  "description": "A private, premium realtime checkers table from Branice😘.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -28,7 +28,7 @@
     {
       "name": "Create room",
       "short_name": "New room",
-      "description": "Start a private Branice checkers room.",
+      "description": "Start a private Branice😘 checkers room.",
       "url": "/?action=create",
       "icons": [
         {
@@ -41,7 +41,7 @@
     {
       "name": "Join room",
       "short_name": "Join room",
-      "description": "Enter a private Branice room code.",
+      "description": "Enter a private Branice😘 room code.",
       "url": "/?action=join",
       "icons": [
         {
